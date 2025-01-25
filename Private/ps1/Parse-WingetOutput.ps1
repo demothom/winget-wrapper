@@ -67,18 +67,29 @@ function Convert-WingetOutput {
     # Identify the separator between the column headers and the data.
     $columnHeaderSeparator = $WingetData | Select-String -Pattern '^\-+$'
     if ($null -eq $columnHeaderSeparator) {
-        Write-Error "Column header separator not found. Data is not in the right format."
+        Write-Error 'Column header separator could not be found. Cannot parse package data.'
         return $null
     }
 
-    # Check the lengths of the strings in the table
+    # If some of the lines are longer than the separator, it may indicate that the input is not utf8 encoded.
+    # This leads to some characters being replaced by two characters, so the indices of the data lines do not 
+    # match those of the column headers. 
+    # This case is not handled by the parsing below, so we have to abandon.
+    foreach ($dataLine in ($WingetData | Select-Object -Skip $columnHeaderSeparator.LineNumber)) {
+        if($dataLine.Length -gt $columnHeaderSeparator.Line.Length) {
+            Write-Error 'Inconsistant length of data lines detected. This might indicate a wrong encoding ' +
+                        'of the input data. Please make sure it is utf8 encoded. You can use the helper ' +
+                        'function Invoke-WingetQuery for this.'
+            return $null
+        }
+    }
 
     $columnHeaderLine = $wingetData | Select-Object -Index ($columnHeaderSeparator.LineNumber - 2)
     # Split the header line. Keep trailing whitespaces to be able to calculate the width of the columns.
     $columnHeaders = $columnHeaderLine -split '(?<=\s)(?=\S)'
     $columnCount = ($columnHeaders | Measure-Object).Count
     if ($columnCount -lt 2) {
-        Write-Error "Could not separate column headers."
+        Write-Error 'Could not separate column headers.'
         return $null
     }
 
