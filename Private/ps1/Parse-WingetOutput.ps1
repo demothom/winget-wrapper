@@ -1,32 +1,13 @@
-$wingetErrorstrings = Get-Content '.\winget-errorstrings.txt'
+. "$PSScriptRoot\winget-errorstrings.ps1"
+$wingetErrorstrings = Get-WingetErrorStrings
 
-function Invoke-WingetQuery {
-    param(
-        [ValidateScript(
-            { $_ -match '^winget\s.*'}
-        )]
-        [string] $Query
-    )
-
-    $previousConsoleEncoding = [Console]::OutputEncoding
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
-    $wingetOutput = Invoke-Expression $Query
-    [Console]::OutputEncoding = $previousConsoleEncoding
-
-    return $wingetOutput
-}
-
-function Parse-WingetOutput {
-    param(
-        #[ValidateNotNullOrEmpty()]
+function Convert-WingetOutput {
+    param (
         [ValidateScript(
             { -not ($_ | Select-String $wingetErrorstrings) }
         )]
         [string[]] $WingetData
     )
-
-    # $previousConsoleEncoding = [Console]::OutputEncoding
-    # [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
     # The fist few lines of the winget output may contain gibberish.
     # The real data consists of a line of column headers, followed by a line of dashes '-' that separates
@@ -54,7 +35,7 @@ function Parse-WingetOutput {
     # https://stackoverflow.com/questions/43418812/check-whether-a-string-contains-japanese-chinese-characters
     $wideCharRegex = '[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\u3131-\uD79D]'
 
-    $result = foreach($dataLine in ($WingetData | Select-Object -Skip $columnHeaderSeparator.LineNumber)) {
+    $result = foreach ($dataLine in ($WingetData | Select-Object -Skip $columnHeaderSeparator.LineNumber)) {
         
         $data = [ordered]@{}
 
@@ -68,7 +49,7 @@ function Parse-WingetOutput {
         $columnText = $dataLine.Substring(0, $firstColumnHeader.Length - $wideCharCount).Trim()
         $data.Add($columnName, $columnText)
 
-        foreach($columnHeader in $($columnHeaders | Select-Object -SkipIndex 0, ($columnCount - 1))) {
+        foreach ($columnHeader in $($columnHeaders | Select-Object -SkipIndex 0, ($columnCount - 1))) {
             $columnName = $columnHeader.Trim()
             $columnText = $dataLine.Substring($columnHeaderLine.IndexOf($columnHeader) - $wideCharCount, $columnHeader.Length).Trim()
             $data.Add($columnName, $columnText)
