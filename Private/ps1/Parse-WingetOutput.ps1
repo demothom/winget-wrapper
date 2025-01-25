@@ -32,14 +32,46 @@ function Convert-WingetOutput {
     )
 
     # When storing the output of winget into a variable, progress data shown by winget is also stored. 
-    # So the first few lines may contain some gibberish that has to be omitted.
+    # So the first few lines may contain some gibberish that has to be omitted.  
+    # The data we are interested in consists of a line of column headers, followed by a line of dashes '-'
+    # that separates the headers from the data. 
     # The real data consists of a line of column headers, followed by a line of dashes '-' that separates
     # the headers from the data. The rest of the lines contain the package data.
+    #
+    # Example data from 'winget find notepad++':
+    # Name         Id                   Version Match          Source
+    # ---------------------------------------------------------------
+    # Notepad++    Notepad++.Notepad++  8.7.5                  winget
+    # Notepad Next dail8859.NotepadNext 0.1     Tag: notepad++ winget
+
+    # The lengths of the column names plus the trailing spaces to the next name can be used to identify 
+    # the corresponding text inside the data lines.
+    # Some characters are printed two cells wide inside consoles. This is taken into account by winget by 
+    # adjusting the line lengths (i.e. reduce the trailing spaces to the next column by one per wide character).
+    # Those characters only seem to appear in the first column, wich consists of the package names.
+    # Some example for this with 'winget find python':
+    #
+    # Name                            Id                              Version         Match           Source
+    # -------------------------------------------------------------------------------------------------------
+    # [...]
+    # C++ to Python Converter         9PBVQZ72QDQN                    Unknown                         msstore
+    # 计算机二级 Python 考试题库      9PBKTNDS9VSH                    Unknown                         msstore
+    # Anaconda3                       Anaconda.Anaconda3              2024.10-1       Command: python winget
+    # [...]
+
+    # To parse those lines into chunks, indices have to be reduced by the amount of those characters.
+    # The following regex matches chinese, japanese and korean characters. It was taken from
+    # https://stackoverflow.com/questions/43418812/check-whether-a-string-contains-japanese-chinese-characters
+    $wideCharRegex = '[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\u3131-\uD79D]'
+
+    # Identify the separator between the column headers and the data.
     $columnHeaderSeparator = $WingetData | Select-String -Pattern '^\-+$'
     if ($null -eq $columnHeaderSeparator) {
         Write-Error "Column header separator not found. Data is not in the right format."
         return $null
     }
+
+    # Check the lengths of the strings in the table
 
     $columnHeaderLine = $wingetData | Select-Object -Index ($columnHeaderSeparator.LineNumber - 2)
     # Split the header line. Keep trailing whitespaces to be able to calculate the width of the columns.
@@ -50,12 +82,6 @@ function Convert-WingetOutput {
         return $null
     }
 
-    # Some characters are printed two cells wide. This is taken into account by winget by adjusting the line lengths.
-    # Those characters only seem to appear in the first column, wich consists of the package names.
-    # To parse the lines into chunks, indices have to be reduced by the amount of those characters.
-    # The following regex matches chinese, japanese and korean characters:
-    # https://stackoverflow.com/questions/43418812/check-whether-a-string-contains-japanese-chinese-characters
-    $wideCharRegex = '[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\u3131-\uD79D]'
 
     $result = foreach ($dataLine in ($WingetData | Select-Object -Skip $columnHeaderSeparator.LineNumber)) {
         
