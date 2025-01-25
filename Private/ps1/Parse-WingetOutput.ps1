@@ -2,6 +2,28 @@
 $wingetErrorstrings = Get-WingetErrorStrings
 
 function Convert-WingetOutput {
+    <#
+    .SYNOPSIS
+        Converts the output of winget to an object representation.
+    .DESCRIPTION
+        Winget commands like find or list return the list of packages as an array of strings wich represent 
+        a table with the package information. This makes it hard to find a specific package automatically. 
+        This function parses the strings and returns the package data as a list of pscustomobjects. 
+        The output of winget may contain other information besides the table of package data. This extra 
+        information is ignored.
+    .INPUTS
+        WingetData: the list of strings returned by a call to winget.
+    .OUTPUTS
+        Returns null, if the input does not contain a table with package data. Returns the contents of the 
+        table as a list of pscustomobject otherwise.
+    .EXAMPLE
+        Convert-WingetOutput -WingetData $data
+    .NOTES
+        When storing the output of winget to a variable, the encoding has to be set to utf8. To make sure 
+        of that use [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new() beforhand, or use the 
+        helper function Invoke-WingetQuery.
+    #>
+    [CmdletBinding()]
     param (
         [ValidateScript(
             { -not ($_ | Select-String $wingetErrorstrings) }
@@ -9,10 +31,10 @@ function Convert-WingetOutput {
         [string[]] $WingetData
     )
 
-    # The fist few lines of the winget output may contain gibberish.
+    # When storing the output of winget into a variable, progress data shown by winget is also stored. 
+    # So the first few lines may contain some gibberish that has to be omitted.
     # The real data consists of a line of column headers, followed by a line of dashes '-' that separates
     # the headers from the data. The rest of the lines contain the package data.
-    # The fist step is to identify the position of the separator line and get the line with names of the columns.
     $columnHeaderSeparator = $WingetData | Select-String -Pattern '^\-+$'
     if ($null -eq $columnHeaderSeparator) {
         Write-Error "Column header separator not found. Data is not in the right format."
@@ -64,5 +86,5 @@ function Convert-WingetOutput {
         [pscustomobject]$data
     }
 
-    return $result
+    $result
 }
